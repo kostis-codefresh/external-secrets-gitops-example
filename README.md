@@ -19,18 +19,25 @@ ESO polls Vault every 15 seconds and writes values into a native Kubernetes `Sec
 ## 1. Prerequisites
 
 - A Kubernetes cluster with `cluster-admin` permissions
-- `kubectl` and `helm` (v3)
+- `kubectl` and Argo CD installed in the `argocd` namespace
 
 ---
 
 ## 2. Set up Vault
 
-Install Vault in dev mode (root token = `root`, pre-unsealed):
+Install Vault in dev mode (root token = `root`, pre-unsealed) via Argo CD:
 
 ```bash
-helm repo add hashicorp https://helm.releases.hashicorp.com && helm repo update
-kubectl create namespace vault
-helm install vault hashicorp/vault --namespace vault --set "server.dev.enabled=true"
+argocd app create vault \
+--project default \
+--repo https://helm.releases.hashicorp.com \
+--helm-chart vault \
+--revision 0.28.0 \
+--sync-policy auto \
+--sync-option CreateNamespace=true \
+--parameter server.dev.enabled=true \
+--dest-namespace vault \
+--dest-server https://kubernetes.default.svc
 ```
 
 Exec into the pod and configure it:
@@ -74,15 +81,29 @@ exit
 ## 3. Set up the External Secrets Operator
 
 ```bash
-helm repo add external-secrets https://charts.external-secrets.io && helm repo update
-helm install external-secrets external-secrets/external-secrets \
-  --namespace external-secrets --create-namespace
+argocd app create eso \
+--project default \
+--repo https://charts.external-secrets.io \
+--helm-chart external-secrets \
+--revision 0.9.19 \
+--sync-policy auto \
+--sync-option CreateNamespace=true \
+--dest-namespace external-secrets \
+--dest-server https://kubernetes.default.svc
 ```
 
 Apply the `ClusterSecretStore` (connects ESO to Vault using the `demo` Kubernetes auth role):
 
 ```bash
-kubectl apply -f manifests/vault-integration/secretstore.yml
+argocd app create vault-secret-store \
+--project default \
+--repo https://github.com/kostis-codefresh/external-secrets-gitops-example.git \
+--path "./manifests/vault-integration" \
+--sync-policy auto \
+--dest-namespace external-secrets \
+--dest-server https://kubernetes.default.svc
+
+
 kubectl get clustersecretstore vault-backend  # should show READY: True
 ```
 
@@ -93,26 +114,13 @@ kubectl get clustersecretstore vault-backend  # should show READY: True
 Point an Argo CD application at `manifests/app` in this repo. That directory contains the Deployment, Service, and the `ExternalSecret` that creates the `mysql-credentials` Kubernetes secret.
 
 ```bash
-kubectl apply -f - <<EOF
-apiVersion: argoproj.io/v1alpha1
-kind: Application
-metadata:
-  name: gitops-secrets-app
-  namespace: argocd
-spec:
-  project: default
-  source:
-    repoURL: <YOUR_REPO_URL>
-    targetRevision: main
-    path: manifests/app
-  destination:
-    server: https://kubernetes.default.svc
-    namespace: default
-  syncPolicy:
-    automated:
-      prune: true
-      selfHeal: true
-EOF
+argocd app create my-secret-app \
+--project default \
+--repo https://github.com/kostis-codefresh/external-secrets-gitops-example.git \
+--path "./manifests/app" \
+--sync-policy auto \
+--dest-namespace default \
+--dest-server https://kubernetes.default.svc
 ```
 
 Once synced, verify and access the app:
