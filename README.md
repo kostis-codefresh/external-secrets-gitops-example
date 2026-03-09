@@ -145,6 +145,10 @@ kubectl exec -it vault-0 -n vault -- vault kv put secret/mysql_credentials \
   password="new_super_secret_password"
 ```
 
+You can also use the Vault UI but at `http://localhost:8200/ui/vault/secrets/secret/kv/mysql_credentials/metadata/versions`. 
+Port forward with `kubectl port-forward -n vault vault-0 8200:8200`
+Then login using `root` as token.
+
 Within ~15 seconds the app reloads automatically—no restart, no Argo CD sync:
 
 ```bash
