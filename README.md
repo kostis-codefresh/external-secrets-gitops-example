@@ -62,14 +62,14 @@ vault write auth/kubernetes/config \
 
 # Policy and role for ESO
 vault policy write eso-read-policy - <<EOF
-path "secret/data/mysql_credentials" {
-  capabilities = ["read"]
+path "secret/*" {
+  capabilities = [ "read", "list" ]
 }
 EOF
 
 vault write auth/kubernetes/role/demo \
-  bound_service_account_names=external-secrets \
-  bound_service_account_namespaces=external-secrets \
+  bound_service_account_names=* \
+  bound_service_account_namespaces=* \
   policies=eso-read-policy \
   ttl=24h
 
